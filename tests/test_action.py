@@ -155,4 +155,4 @@ class TestMove(object):
         entity = object() 
 
         move(world, entity)
-        world.step_entity.assert_called_once_with(entity, xstep, ystep)
+        world.focus.step_entity.assert_called_once_with(entity, xstep, ystep)

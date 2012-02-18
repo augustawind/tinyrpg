@@ -250,13 +250,6 @@ class World(GameMode):
         x, y = self.portals_dest2xy[destname][self.focus.name]
         self.add_entity(entity, x, y, z, destname)
 
-    def step_entity(self, entity, xstep, ystep):
-        """Step the given entity (`xstep`, `ystep`) tiles from her
-        current position, if the target destination is walkable.
-
-        If the move succeeds, return True. Else, return False.
-        """
-
     def step_player(self, xstep, ystep):
         """Step the player (`xstep`, `ystep`) tiles from her current
         position.

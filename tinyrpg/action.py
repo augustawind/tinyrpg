@@ -144,5 +144,5 @@ class Move(AbstractAction):
         self.step = (xstep, ystep)
 
     def __call__(self, world, entity):
-        world.step_entity(entity, *self.step)
+        world.focus.step_entity(entity, *self.step)
 
