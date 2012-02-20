@@ -21,10 +21,11 @@ class AbstractAction(object):
         """Execute the action, given WorldMode object `world` and
         acting Entity object `entity`.
 
-        :param world: the active WorldMode object
-        :type world: crystals.app.Worldmode
-        :param entity: the "acting" entity
-        :type entity: crystals.world.Entity
+        :Parameters:
+            world : `crystals.world.World`
+                An active world object.
+            entity : `crystals.world.Entity`
+                The "acting" entity in the world.
         """
 
 
@@ -59,9 +60,11 @@ class ActionCycle(AbstractAction):
     def __init__(self, n, *actions):
         """Initialize the action. 
 
-        :param n: Number of times to repeat the sequence, 2 or more.
-        :type n: int
-        :param actions: One or more action objects.
+        :Parameters:
+            `n` : int
+                Number of times to repeat the sequence, 2 or more.
+            `actions` : callable
+                One or more actions.
         """
         self._actions = chain(*repeat(actions, n))
         self._final_action = actions[-1]
@@ -136,10 +139,11 @@ class Move(AbstractAction):
     def __init__(self, xstep, ystep):
         """Initialize the action.
 
-        :param xstep: number of tiles to move horizontally
-        :type xstep: int
-        :param ystep: number of tiles to move vertically
-        :type ystep: int
+        :Parameters:
+            xstep : int
+                Number of tiles to move the entity horizontally.
+            ystep : int
+                Number of tiles to move the entity vertically.
         """
         self.step = (xstep, ystep)
 

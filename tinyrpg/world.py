@@ -19,23 +19,29 @@ ORIGIN_Y = 124      # of room display, in pixels
 class Entity(pyglet.sprite.Sprite):
     """A tangible thing in the game world.
     
-    :ivar name str: Name of the entity for display to the player.
-    :ivar walkable bool: ``True`` if the entity can be walked upon;
-                         ``False`` if the entity obstructs movement.
-    :ivar action: Callable to be called if the player character engages
-                  with the entity.
-    :ivar facing: A 2-tuple or list describing the direction the
-                  entity initially faces.
-    :ivar id: If given, can be used by a `crystals.world.Room` object
-              to index specific entities by id.
+    :Ivariables:
+        name : str
+            Name of the entity for display to the player.
+        walkable : bool
+            ``True`` if the entity can be walked upon; ``False`` if the
+            entity obstructs movement.
+        action : callable
+            Object to be called if the entity is engaged with.
+        facing : sequence
+            A 2-tuple or list describing the direction the entity
+            initially faces.
+        id : object
+            If given, can be used by a `crystals.world.Room` object
+            to index specific entities by id.
     """
 
     def __init__(self, image, name='', walkable=False, action=None,
                  facing=(0, -1), id=None):
         """Return an Entity instance.
         
-        :param image: An ``AbstractImage`` or ``Animation`` object
-                      (package ``pyglet.image``).
+        :Parameters:
+            image : pyglet.image.AbstractImage or pyglet.image.Animation
+                Image to represent the entity.
 
         All other parameters are optional and give initial values for
         instance attributes.
@@ -82,10 +88,15 @@ class Room(object):
     def _update_entity(self, entity, x, y, z):
         """Visually update the entity to reflect its current state.
         
-        :param entity `Entity`: The entity to update.
-        :param x int: X coordinate of the entity.
-        :param y int: Y coordinate of the entity.
-        :param z int: Z coordinate of the entity.
+        :Parameters:
+            `entity` : `Entity`
+                The entity to update.
+            `x` : `int`
+                X coordinate of the entity.
+            `y` : int
+                Y coordinate of the entity.
+            `z` : int
+                Z coordinate of the entity.
 
         This method should be called every time a position in the room
         is assigned to a new Entity.

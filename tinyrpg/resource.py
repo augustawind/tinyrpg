@@ -11,7 +11,7 @@ class Loader(Loader):
 
     @staticmethod
     def _scale_texture(texture, width, height):
-        """Scale `texture` to `width` by `height`.
+        """Scale the given texture to the given size.
         
         :param texture: The texture to scale.
         :type texture: pyglet.image.Texture
@@ -28,7 +28,7 @@ class Loader(Loader):
         """Load an image with an optional transformation.
 
         Extends the parent method to optionally scale the image to the
-        given width and height. If not given, no scaling will occur.
+        given width and height.  If not given, no scaling will occur.
         
         :param width int: New width of image, in pixels.
         :param height int: New height of image, in pixels.
