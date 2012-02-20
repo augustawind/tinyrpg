@@ -1,4 +1,4 @@
-""""""
+"""build rooms from entities, and worlds from rooms"""
 
 import pyglet
 from pyglet.graphics import OrderedGroup
@@ -7,32 +7,58 @@ from pyglet.window import key
 from tinyrpg import gui
 from tinyrpg.base import GameMode
 
-__all__ = ['Entity', 'Room', 'World']
+__all__ = ['TILE_WIDTH', 'TILE_HEIGHT', 'ORIGIN_X', 'ORIGIN_Y',
+           'Entity', 'Room', 'World']
 
-TILE_SIZE = 24 # Width and height of each tile, in pixels
-ORIGIN_X = 10  # X and Y coordinates of the bottom left corner
-ORIGIN_Y = 124 # of room display, in pixels
+TILE_WIDTH = 24     # Width of each tile, in pixels
+TILE_HEIGHT = 24    # Height of each tile, in pixels
+ORIGIN_X = 10       # X and Y coordinates of the bottom left corner
+ORIGIN_Y = 124      # of room display, in pixels
 
 
 class Entity(pyglet.sprite.Sprite):
-    """A tangible thing in the game world."""
+    """A tangible thing in the game world.
+    
+    :ivar name str: Name of the entity for display to the player.
+    :ivar walkable bool: ``True`` if the entity can be walked upon;
+                         ``False`` if the entity obstructs movement.
+    :ivar action: Callable to be called if the player character engages
+                  with the entity.
+    :ivar facing: A 2-tuple or list describing the direction the
+                  entity initially faces.
+    :ivar id: If given, can be used by a `crystals.world.Room` object
+              to index specific entities by id.
+    """
 
-    def __init__(self, name, walkable, image, action=None, facing=(0, -1),  
-                 id=None):
+    def __init__(self, image, name='', walkable=False, action=None,
+                 facing=(0, -1), id=None):
+        """Return an Entity instance.
+        
+        :param image: An ``AbstractImage`` or ``Animation`` object
+                      (package ``pyglet.image``).
+
+        All other parameters are optional and give initial values for
+        instance attributes.
+        """
         super(Entity, self).__init__(image)
 
         self.name = name
         self.walkable = walkable
-        self._facing = facing
+        self.facing = facing
         self.action = action
         self.id = id
 
 
-class Room(list):
+class Room(object):
+    """The component parts of a world."""
 
-    def __init__(self, name, entities):
-        super(Room, self).__init__(entities)
+    def __init__(self, name, entities, portals, origin_x=ORIGIN_X,
+                 origin_y=ORIGIN_Y, tile_width=TILE_WIDTH,
+                 tile_height=TILE_HEIGHT):
         self.name = name
+        self._entities = entities
+        self.portals = {}
+        self.add_portals(**portals)
         self.batch = None
 
         # Index unique entities by instance attribute `id`
@@ -41,19 +67,31 @@ class Room(list):
             if entity.id:
                 self.uniques[entity.id] = entity
 
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+    
     def _iter_entities(self):
-        for y in xrange(len(self)):
-            for x in xrange(len(self[y])):
-                for z, entity in enumerate(self[y][x]):
+        for y in xrange(len(self._entities)):
+            for x in xrange(len(self._entities[y])):
+                for z, entity in enumerate(self._entities[y][x]):
                     if entity:
                         yield entity, x, y, z
 
     def _update_entity(self, entity, x, y, z):
-        """Update the entity's rendered position to reflect (x, y, z),
-        and set the entity's batch to self.batch.
+        """Visually update the entity to reflect its current state.
+        
+        :param entity `Entity`: The entity to update.
+        :param x int: X coordinate of the entity.
+        :param y int: Y coordinate of the entity.
+        :param z int: Z coordinate of the entity.
+
+        This method should be called every time a position in the room
+        is assigned to a new Entity.
         """
-        newx = x * TILE_SIZE + ORIGIN_X
-        newy = y * TILE_SIZE + ORIGIN_Y
+        newx = x * self.tile_width + self.origin_x
+        newy = y * self.tile_height + self.origin_y
         entity.set_position(newx, newy)
         entity.group = OrderedGroup(z)
         entity.batch = self.batch
@@ -67,22 +105,80 @@ class Room(list):
         """Return True if, for every layer, (x, y) is in bounds and is
         either None or a walkable entity, else return False.
         """
-        if (x < 0 or x >= len(self[0])) or (y < 0 or y >= len(self)):
+        if not (0 <= y < len(self._entities) and
+                0 <= x < len(self._entities[y])):
             return False
-        for e in self[y][x]:
+        for e in self._entities[y][x]:
             if e != None and not e.walkable:
                 return False
         return True
 
-    def get_coords(self, entity):
-        """Return x, y, and z coordinates of the given entity in the room."""
-        x = (entity.x - ORIGIN_X) / TILE_SIZE
-        y = (entity.y - ORIGIN_Y) / TILE_SIZE
+    @staticmethod
+    def get_coords(entity):
+        """Return x, y, and z coordinates of the given entity."""
+        x = (entity.x - self.origin_x) / self.tile_width
+        y = (entity.y - self.origin_y) / self.tile_height
         if entity.group is None:
             z = None
         else:
             z = entity.group.order
         return x, y, z
+
+    def get_entity(self, x, y, z):
+        """Return the entity at coordinate position (x, y, z), or None
+        if no entity is present.
+        """
+        return self._entities[y][x][z]
+
+    def add_portals(self, **portals):
+        """Add and index the given portals.
+
+        :param portals dict: A mapping of (x, y) coordinate tuples to
+                             destination rooms.
+        """
+        for from_room, portal in portals.iteritems():
+            for coords, dest in portal.iteritems():
+                self.portals[coords] = dest
+                self.portals[dest] = coords
+
+    def _place_entity(self, entity, x, y, z):
+        """Assign coordinate point (x, y, z) to `entity`."""
+        self._entities[y][x][z] = entity
+
+    def add_entity(self, entity, x, y, z=None):
+        """Add the given entity at (x, y, z).
+        
+        If z is None or out of range, attempt to add the entity to an
+        empty cell with the lowest z value at (x, y).  If none are found,
+        append the entity to the top of the stack.  Otherwise, if no
+        entity exists at (x, y, z) place it there, else insert the
+        entity at ``z + 1``.
+        """
+        depth = len(self._entities[y][x])
+
+        if z is None:
+            z = depth - 1
+        else:
+            z = min(depth - 1, z)
+
+        if self._entities[y][x][z]:
+            z += 1
+            if z == depth:
+                self._entities[y][x].append(None)
+            else:
+                self._entities[y][x].insert(z, None)
+                for i, ent in enumerate(self._entities[y][x][z + 1:]):
+                    if ent:
+                        self._place_entity(ent, x, y, z + 1 + i)
+
+        self._place_entity(entity, x, y, z)
+        self._update_entity(entity, x, y, z)
+    
+    def pop_entity(self, x, y, z):
+        """Remove and return the entity at (x, y, z)."""
+        entity = self._entities[y][x][z]
+        self._entities[y][x][z] = None
+        return entity
     
     def step_entity(self, entity, xstep, ystep):
         """Move `entity` from its current position by (xstep, ystep),
@@ -108,80 +204,29 @@ class Room(list):
         self.add_entity(entity, newx, newy, z)
         return True
 
-    def _place_entity(self, entity, x, y, z):
-        """Assign coordinate point (x, y, z) to `entity`."""
-        self[y][x][z] = entity
-        self._update_entity(entity, x, y, z)
-
-    def add_entity(self, entity, x, y, z=None):
-        """Add the given entity at (x, y, z).
-        
-        If z is None or out of range, attempt to add the entity to an
-        empty cell with the lowest z value at (x, y).  If none are found,
-        append the entity to the top of the stack.  Otherwise, if no
-        entity exists at (x, y, z) place it there, else insert the
-        entity at ``z + 1``.
+    def portal_entity(self, entity, x, y):
+        """If a portal exists at (x, y), transfer entity from its
+        current room to the destination room of the portal.
         """
-        depth = len(self[y][x])
-
-        if z is None:
-            z = depth - 1
-        else:
-            z = min(depth - 1, z)
-
-        if self[y][x][z]:
-            z += 1
-            if z == depth:
-                self[y][x].append(None)
-            else:
-                self[y][x].insert(z, None)
-                for i, ent in enumerate(self[y][x][z + 1:]):
-                    if ent:
-                        self._place_entity(ent, x, y, z + 1 + i)
-
-        self._place_entity(entity, x, y, z)
-    
-    def pop_entity(self, x, y, z):
-        """Remove and return the entity at (x, y, z)."""
-        entity = self[y][x][z]
-        self[y][x][z] = None
-        return entity
-
-
-class StaticWorld(dict):
-    """A collection of rooms linked by portals."""
-
-    def __init__(self, rooms, portals, start):
-        dict.__init__(self, rooms)
-
-        self._portals_dest2xy = dict.fromkeys(portals, {})
-        self._portals_xy2dest = dict.fromkeys(portals, {})
-        for from_room, portal in portals.iteritems():
-            for dest, xy in portal.iteritems():
-                self._portals_dest2xy[from_room][dest] = xy
-                self._portals_xy2dest[from_room][xy] = dest
-
-        self._focus = None
-        self.batch = None
-        self.set_focus(start)
-
+        from_room = self.focus.name
+        dest = self.portals[(x, y)]
+        z = self.focus.get_coords(entity)[2]
+        self.pop_entity(x, y, z)
+        x, y = self.portals[self.focus.name]
+        self.add_entity(entity, x, y, z, destname)
 
 
 class World(GameMode):
-    """Game mode where the player explores a world and interacts with
-    its entities.
-    """
+    """Player explores a collection of `Room` objects."""
 
-    def __init__(self, window, rooms, portals, start, player, plot):
-        GameMode.__init__(self, window)
-        dict.__init__(self, rooms)
+    def __init__(self, window, rooms, player, plot):
+        super(World, self).__init__(window)
 
+        self._rooms = rooms
         self.player = player
         self.plot = plot
-        self.plot.send(self)
+        self.plot.start(self)
 
-        self.batch = pyglet.graphics.Batch()
-        
         ib_padding = 10
         ib_x = ib_y = ib_padding
         ib_width = window.width - (ib_padding * 2)
@@ -191,25 +236,12 @@ class World(GameMode):
             ib_x, ib_y, ib_width, ib_height, self.batch, show_box=True,
             style=ib_style)
 
-        self._portals_dest2xy = dict.fromkeys(portals, {})
-        self._portals_xy2dest = dict.fromkeys(portals, {})
-        for from_room, portal in portals.iteritems():
-            for dest, xy in portal.iteritems():
-                self._portals_dest2xy[from_room][dest] = xy
-                self._portals_xy2dest[from_room][xy] = dest
-
-        self.inputdict = {
+        self.key_switch = {
             key.MOTION_LEFT: (self.step_player, -1, 0),
             key.MOTION_RIGHT: (self.step_player, 1, 0),
             key.MOTION_DOWN: (self.step_player, 0, -1),
             key.MOTION_UP: (self.step_player, 0, 1),
             key.SPACE: (self.interact,),
-        }
-
-        self.action_args = {
-            'Alert': (self.infobox,),
-            'Talk': (self.infobox,),
-            'UpdatePlot': (self.plot,),
         }
 
         self._focus = None
@@ -218,14 +250,9 @@ class World(GameMode):
     @property
     def focus(self):
         return self._focus
-
-    @property
-    def portals_dest2xy(self):
-        return self._portals_dest2xy
-
-    @property
-    def portals_xy2dest(self):
-        return self._portals_xy2dest
+    
+    def __getitem__(self, key):
+        return self._rooms[key]
 
     def set_focus(self, room=''):
         """Set the focus to room with name `room`, setting its batch to
@@ -240,16 +267,6 @@ class World(GameMode):
         room.update()
         self._focus = room
 
-    def portal_entity(self, entity, x, y):
-        """If a portal exists at (x, y), transfer entity from its
-        current room to the destination room of the portal.
-        """
-        destname = self.portals_xy2dest[self.focus.name][(x, y)]
-        z = self.focus.get_coords(entity)[2]
-        self.pop_entity(x, y, z)
-        x, y = self.portals_dest2xy[destname][self.focus.name]
-        self.add_entity(entity, x, y, z, destname)
-
     def step_player(self, xstep, ystep):
         """Step the player (`xstep`, `ystep`) tiles from her current
         position.
@@ -263,7 +280,7 @@ class World(GameMode):
 
         from_room = self.focus.name
         x, y, z = self.focus.get_coords(self.player)
-        if self.portals_xy2dest[from_room].get((x, y)):
+        if (x, y) in self.focus.portals:
             self.portal_player(x, y)
 
     def portal_player(self, x, y):
@@ -272,7 +289,7 @@ class World(GameMode):
         """
         self.portal_entity(self.player, x, y)
         from_room = self.focus.name
-        dest = self.portals_xy2dest[from_room][(x, y)]
+        dest = self.portals[from_room][(x, y)]
         self.set_focus(dest)
 
     def interact(self):
@@ -288,6 +305,6 @@ class World(GameMode):
 
     def on_key_press(self, key, modifiers):
         """Process user input."""
-        if key not in self.inputdict:
+        if key not in self.key_switch:
             return
-        self.inputdict[key][0](*self.inputdict[key][1:])
+        self.key_switch[key][0](*self.key_switch[key][1:])
