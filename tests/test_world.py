@@ -56,9 +56,6 @@ class TestRoom(object):
             room = Room(name, entities, portals)
             room.add_portals.assert_called_once_with(**portals)
 
-    def TestClass_SetInitialBatchToNone(self):
-        mockargs = [MagicMock()] * 3
-
     def TestClass_IndexEntitiesByIdAttr(self):
         e0 = Mock(id=0)
         e1 = Mock(id=1)
@@ -72,6 +69,13 @@ class TestRoom(object):
         room = Room(name, entities, portals)
         assert room.uniques == {1: e1, 2: e2, 3: e3}
 
+    def iter_entities(self, entities):
+        for y, row in enumerate(entities):
+            for x, cell in enumerate(row):
+                for z, entity in enumerate(cell):
+                    if entity:
+                        yield entity, x, y, z
+
     def TestIterEntities_ForEachEntityThatTestsTrue_YieldEntityAndCoords(self):
         name = portals = MagicMock()
         entities = [
@@ -81,9 +85,50 @@ class TestRoom(object):
         room = Room(name, entities, portals)
         iter_ents = room._iter_entities()
 
-        for y, row in enumerate(entities):
-            for x, cell in enumerate(row):
-                for z, entity in enumerate(cell):
-                    if entity:
-                        yielded = next(iter_ents) 
-                        assert yielded == (entity, x, y, z)
+        for entity, x, y, z in self.iter_entities(entities):
+            yielded = next(iter_ents) 
+            assert yielded == (entity, x, y, z)
+
+    def TestUpdateEntity_ValidZCoordGiven_SetGroupOrderToZ(self):
+        mockarg = MagicMock()
+        room = Room('disco hall', mockarg, mockarg)
+
+        entity = Mock(spec=Entity)
+        z = 3
+        room._update_entity(entity, 0, 0, z)
+        assert entity.group == pyglet.graphics.OrderedGroup(z)
+
+    def TestUpdate_CallUpdateEntityOnAllEntities(self):
+        entities = [[[Mock()]],
+                    [[Mock()]]]
+        portals = MagicMock()
+        room = Room('jazz lounge', entities, portals)
+
+        with patch.object(room, '_update_entity'):
+            room.update()
+            for entity, x, y, z in self.iter_entities(entities):
+                room._update_entity.assert_any_call(entity, x, y, z)
+    
+    def TestIsWalkable_AllEntitiesAtGivenXYAreWalkable_ReturnTrue(self):
+        walkable_ent = Mock(walkable=True)
+        entities = [[[walkable_ent, walkable_ent]]]
+        portals = MagicMock()
+        room = Room('hip hop hut', entities, portals)
+
+        assert room.is_walkable(0, 0)
+
+    def TestIsWalkable_EntityAtGivenXYIsUnwalkable_ReturnFalse(self):
+        walkable_ent = Mock(walkable=True)
+        unwalkable_ent = Mock(walkable=False)
+        entities = [[[walkable_ent, unwalkable_ent]]]
+        portals = MagicMock()
+        room = Room('house house', entities, portals)
+
+        assert not room.is_walkable(0, 0)
+
+    def TestIsWalkable_GivenXYOutOfBounds_ReturnFalse(self):
+        entities = [[[Mock()]]]
+        portals = MagicMock()
+        room = Room('reggae shack', entities, portals)
+
+        assert not room.is_walkable(0, 1)

@@ -10,11 +10,13 @@ from tinyrpg.base import GameMode
 __all__ = ['TILE_WIDTH', 'TILE_HEIGHT', 'ORIGIN_X', 'ORIGIN_Y',
            'Entity', 'Room', 'World']
 
-TILE_WIDTH = 24     # Width of each tile, in pixels
-TILE_HEIGHT = 24    # Height of each tile, in pixels
-ORIGIN_X = 10       # X and Y coordinates of the bottom left corner
-ORIGIN_Y = 124      # of room display, in pixels
-
+# Default width and height of each tile, in pixels
+TILE_WIDTH = 24
+TILE_HEIGHT = 24
+# Default coordinates of the bottom left corner of the world display
+# relative to the bottom left corner of the window
+ORIGIN_X = 10
+ORIGIN_Y = 124
 
 class Entity(pyglet.sprite.Sprite):
     """A tangible thing in the game world.
@@ -79,9 +81,9 @@ class Room(object):
         self.tile_height = tile_height
     
     def _iter_entities(self):
-        for y in xrange(len(self._entities)):
-            for x in xrange(len(self._entities[y])):
-                for z, entity in enumerate(self._entities[y][x]):
+        for y, row in enumerate(self._entities):
+            for x, cell in enumerate(row):
+                for z, entity in enumerate(cell):
                     if entity:
                         yield entity, x, y, z
 
@@ -113,8 +115,10 @@ class Room(object):
             self._update_entity(entity, x, y, z)
 
     def is_walkable(self, x, y):
-        """Return True if, for every layer, (x, y) is in bounds and is
-        either None or a walkable entity, else return False.
+        """Return True if the given position is walkable.
+
+        A position in the room is walkable if its X and Y coordinates
+        are in bounds and all entities at that X and Y are walkable.
         """
         if not (0 <= y < len(self._entities) and
                 0 <= x < len(self._entities[y])):
@@ -126,7 +130,7 @@ class Room(object):
 
     @staticmethod
     def get_coords(entity):
-        """Return x, y, and z coordinates of the given entity."""
+        """Return X, Y, and Z coordinates of the given entity."""
         x = (entity.x - self.origin_x) / self.tile_width
         y = (entity.y - self.origin_y) / self.tile_height
         if entity.group is None:
