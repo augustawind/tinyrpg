@@ -9,10 +9,6 @@ class GameMode(object):
         self.window = window
         self.batch = pyglet.graphics.Batch()
 
-    def __repr__(self):
-        """For identification purposes."""
-        return self.__class__.__name__
-
     def activate(self):
         """Push all event handlers onto the window."""
         self.window.push_handlers(self)
