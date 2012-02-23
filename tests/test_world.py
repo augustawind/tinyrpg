@@ -54,7 +54,7 @@ class TestRoom(object):
         portals = MagicMock()
         with patch.object(Room, 'add_portals'):
             room = Room(name, entities, portals)
-            room.add_portals.assert_called_once_with(**portals)
+            room.add_portals.assert_called_once_with(portals)
 
     def TestClass_IndexEntitiesByIdAttr(self):
         e0 = Mock(id=0)
@@ -132,3 +132,43 @@ class TestRoom(object):
         room = Room('reggae shack', entities, portals)
 
         assert not room.is_walkable(0, 1)
+
+    def TestGetCoords_EntityReturnCorrectCoords(self):
+        origin_x = 15
+        origin_y = 25
+        tile_width = 5
+        tile_height = 10
+
+        entities = portals = MagicMock()
+        room = Room(
+            'boogie bungalow', entities, portals, origin_x=origin_x,
+            origin_y=origin_y, tile_width=tile_width, tile_height=tile_height)
+
+        x = 5
+        y = 30
+        group = pyglet.graphics.OrderedGroup(3)
+        entity = Mock(x=x, y=y, group=group)
+
+        ex, ey, ez = room.get_coords(entity)
+        assert ex == (x - origin_x) / tile_width
+        assert ey == (y - origin_y) / tile_height
+        assert ez == group.order
+
+    def TestAddPortals_MappingHasHashableVals_UpdatePortalsWith2WayMap(self):
+        entities = MagicMock()
+        portals = {}
+        room = Room('generic room', entities, portals)
+
+        new_portals = {'another room': (1, 1), 'some other room': (2, 5)}
+        room.add_portals(new_portals)
+        indexed_portals = new_portals.copy()
+        indexed_portals.update((v, k) for (k, v) in new_portals.iteritems())
+        assert room.portals == indexed_portals
+
+    def TestAddEntity_(self):pass
+
+    def TestPopEntity_(self):pass
+
+    def TestStepEntity_(self):pass
+
+    def TestPortalEntity_(self):pass

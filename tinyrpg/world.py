@@ -7,16 +7,16 @@ from pyglet.window import key
 from tinyrpg import gui
 from tinyrpg.base import GameMode
 
-__all__ = ['TILE_WIDTH', 'TILE_HEIGHT', 'ORIGIN_X', 'ORIGIN_Y',
+__all__ = ['ORIGIN_X', 'ORIGIN_Y', 'TILE_WIDTH', 'TILE_HEIGHT',
            'Entity', 'Room', 'World']
 
-# Default width and height of each tile, in pixels
-TILE_WIDTH = 24
-TILE_HEIGHT = 24
 # Default coordinates of the bottom left corner of the world display
 # relative to the bottom left corner of the window
 ORIGIN_X = 10
 ORIGIN_Y = 124
+# Default width and height of each tile, in pixels
+TILE_WIDTH = 24
+TILE_HEIGHT = 24
 
 class Entity(pyglet.sprite.Sprite):
     """A tangible thing in the game world.
@@ -66,7 +66,7 @@ class Room(object):
         self.name = name
         self._entities = entities
         self.portals = {}
-        self.add_portals(**portals)
+        self.add_portals(portals)
         self.batch = None
 
         # Index unique entities by instance attribute `id`
@@ -88,17 +88,17 @@ class Room(object):
                         yield entity, x, y, z
 
     def _update_entity(self, entity, x, y, z):
-        """Visually update the entity to reflect its current state.
+        """Update the entity to appear at the given coordinates.
         
         :Parameters:
             `entity` : `Entity`
                 The entity to update.
             `x` : `int`
-                X coordinate of the entity.
+                x coordinate of the entity.
             `y` : int
-                Y coordinate of the entity.
+                y coordinate of the entity.
             `z` : int
-                Z coordinate of the entity.
+                z coordinate of the entity.
 
         This method should be called every time a position in the room
         is assigned to a new Entity.
@@ -110,51 +110,40 @@ class Room(object):
         entity.batch = self.batch
 
     def update(self):
-        """Update the room, preparing it for rendering."""
+        """Update all entities in the room, preparing it for rendering."""
         for entity, x, y, z in self._iter_entities():
             self._update_entity(entity, x, y, z)
 
     def is_walkable(self, x, y):
         """Return True if the given position is walkable.
 
-        A position in the room is walkable if its X and Y coordinates
-        are in bounds and all entities at that X and Y are walkable.
-        """
-        if not (0 <= y < len(self._entities) and
-                0 <= x < len(self._entities[y])):
-            return False
-        for e in self._entities[y][x]:
-            if e != None and not e.walkable:
-                return False
-        return True
+        :rtype: bool
 
-    @staticmethod
-    def get_coords(entity):
-        """Return X, Y, and Z coordinates of the given entity."""
+        A position in the room is walkable if its x and y coordinates
+        are in bounds and all entities at that x and y are walkable.
+        """
+        return(0 <= y < len(self._entities) and
+               0 <= x < len(self._entities[y]) and
+               all(e is None or e.walkable for e in self._entities[y][x]))
+
+    def get_coords(self, entity):
+        """Return the coordinate position of the given entity.
+        
+        :returns: ``x, y, z`` coordinates of the Entity
+        """
         x = (entity.x - self.origin_x) / self.tile_width
         y = (entity.y - self.origin_y) / self.tile_height
-        if entity.group is None:
-            z = None
-        else:
-            z = entity.group.order
+        z = -1 if entity.group is None else entity.group.order
         return x, y, z
 
-    def get_entity(self, x, y, z):
-        """Return the entity at coordinate position (x, y, z), or None
-        if no entity is present.
-        """
-        return self._entities[y][x][z]
-
-    def add_portals(self, **portals):
+    def add_portals(self, portals):
         """Add and index the given portals.
 
-        :param portals dict: A mapping of (x, y) coordinate tuples to
-                             destination rooms.
+        :param portals: A mapping of destination rooms to
+                        ``(x, y)`` coordinate tuples.
         """
-        for from_room, portal in portals.iteritems():
-            for coords, dest in portal.iteritems():
-                self.portals[coords] = dest
-                self.portals[dest] = coords
+        self.portals.update(portals)
+        self.portals.update((v, k) for k, v in portals.iteritems())
 
     def _place_entity(self, entity, x, y, z):
         """Assign coordinate point (x, y, z) to `entity`."""
@@ -170,11 +159,7 @@ class Room(object):
         entity at ``z + 1``.
         """
         depth = len(self._entities[y][x])
-
-        if z is None:
-            z = depth - 1
-        else:
-            z = min(depth - 1, z)
+        z = depth - 1 if z is None else min(depth - 1, z)
 
         if self._entities[y][x][z]:
             z += 1
@@ -196,18 +181,29 @@ class Room(object):
         return entity
     
     def step_entity(self, entity, xstep, ystep):
-        """Move `entity` from its current position by (xstep, ystep),
-        changing the direction of the entity to reflect the direction of
-        the attempted move. 
-        
-        If `entity` is a string, move the unique entity with that id.
-        Return True if the move was successful, else False.
+        """Move given entity a given distance from its current position.
+
+        If the new position isn't walkable, nothing happens.
+
+        :Parameters:
+            entity : Entity or str
+                The entity to move. If a string is given, use the
+                unique entity with that id.
+            xstep : int
+                X distance to move. Positive values move the entity
+                right and negative values left.
+            ystep : int
+                Y distance to move. Positive values move the entity up
+                and negative values down.
+
+        :returns: True if the move succeeded, False otherwise.
+        :rtype: bool
         """
         if type(entity) is str:
-            entity = self.get_entity(entity)
+            entity = self.uniques[entity]
 
         entity.facing = (xstep / abs(xstep) if xstep else 0,
-                      ystep / abs(ystep) if ystep else 0)
+                         ystep / abs(ystep) if ystep else 0)
 
         x, y, z = self.get_coords(entity)
         newx = x + xstep
@@ -220,15 +216,24 @@ class Room(object):
         return True
 
     def portal_entity(self, entity, x, y):
-        """If a portal exists at (x, y), transfer entity from its
-        current room to the destination room of the portal.
+        """Portal the entity from its current given position.
+
+        :Parameters:
+            entity : Entity
+                The entity to portal.
+            x : int
+                X coordinate to portal from.
+            y : int
+                Y coordinate to portal from.
+        
+        The given coordinates must host both the given entity and a
+        portal.
         """
         from_room = self.focus.name
         dest = self.portals[(x, y)]
         z = self.focus.get_coords(entity)[2]
         self.pop_entity(x, y, z)
         x, y = self.portals[self.focus.name]
-        self.add_entity(entity, x, y, z, destname)
 
 
 class World(GameMode):
@@ -264,14 +269,19 @@ class World(GameMode):
 
     @property
     def focus(self):
+        """The currently focused room."""
         return self._focus
     
     def __getitem__(self, key):
         return self._rooms[key]
 
     def set_focus(self, room=''):
-        """Set the focus to room with name `room`, setting its batch to
-        self.batch and updating its entities.
+        """Set the focus to the room with the given key, rendering it.
+
+        :param room: Name of a room in the world.
+        :type room: str
+        
+        If rooms tests false, just redraw the currently focused room.
         """
         if self.focus:
             self.focus.batch = None
@@ -283,14 +293,20 @@ class World(GameMode):
         self._focus = room
 
     def step_player(self, xstep, ystep):
-        """Step the player (`xstep`, `ystep`) tiles from her current
-        position.
+        """Move the player a given distance from its current position.
+
+        :Parameters:
+            xstep : int
+                X distance to move. Positive values move the entity
+                right and negative values left.
+            ystep : int
+                Y distance to move. Positive values move the entity up
+                and negative values down.
 
         If successful and the new position hosts a portal, portal
         the player.
         """
-        success = self.step_entity(self.player, xstep, ystep)
-        if not success:
+        if not self.step_entity(self.player, xstep, ystep):
             return
 
         from_room = self.focus.name
@@ -299,10 +315,11 @@ class World(GameMode):
             self.portal_player(x, y)
 
     def portal_player(self, x, y):
-        """Transfer the player to the destination of the portal at
-        (x, y), then set that room as the focus.
-        """
-        self.portal_entity(self.player, x, y)
+        """Portal the player from its position at the given coordinates.
+        
+        The given coordinates should"""
+        if not self.portal_entity(self.player, x, y):
+            return
         from_room = self.focus.name
         dest = self.portals[from_room][(x, y)]
         self.set_focus(dest)
