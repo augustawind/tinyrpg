@@ -6,19 +6,37 @@ from tinyrpg.world import *
 
 class TestEntity(object):
 
-    def TestClass_SetExpectedInstanceAttrs(self):
+    def TestClass_AllArgsGiven_SetExpectedInstanceAttrs(self):
         image = dummy_image()
         name = 'Dude'
         walkable = False
         action = object()
         facing = (1, 0)
         id = 'thedude'
-        entity = Entity(image, name, walkable, action, facing, id)
+        x = 1
+        y = 2
+        z = 3
+        entity = Entity(image, name, walkable, action, facing, id, x, y, z)
         assert entity.name == name
         assert entity.walkable == walkable
         assert entity.action == action
         assert entity.facing == facing
         assert entity.id == id
+        assert entity.tile_x == x
+        assert entity.tile_y == y
+        assert entity.tile_z == z
+
+    def TestClass_NoKwargsGiven_SetExpectedInstanceAttrs(self):
+        image = dummy_image()
+        entity = Entity(image)
+        assert entity.name == ''
+        assert entity.walkable == False
+        assert entity.action == None
+        assert entity.facing == (0, -1)
+        assert entity.id == None
+        assert entity.tile_x == 0
+        assert entity.tile_y == 0
+        assert entity.tile_z == 0
 
 
 class TestRoom(object):
@@ -94,9 +112,13 @@ class TestRoom(object):
         room = Room('disco hall', mockarg, mockarg)
 
         entity = Mock(spec=Entity)
+        x = 1
+        y = 2
         z = 3
-        room._update_entity(entity, 0, 0, z)
-        assert entity.group == pyglet.graphics.OrderedGroup(z)
+        room._update_entity(entity, x, y, z)
+        entity.update.assert_called_with(
+            x, y, z, room.origin_x, room.origin_y, room.tile_width,
+            room.tile_height, room.batch)
 
     def TestUpdate_CallUpdateEntityOnAllEntities(self):
         entities = [[[Mock()]],
@@ -132,27 +154,6 @@ class TestRoom(object):
         room = Room('reggae shack', entities, portals)
 
         assert not room.is_walkable(0, 1)
-
-    def TestGetCoords_EntityReturnCorrectCoords(self):
-        origin_x = 15
-        origin_y = 25
-        tile_width = 5
-        tile_height = 10
-
-        entities = portals = MagicMock()
-        room = Room(
-            'boogie bungalow', entities, portals, origin_x=origin_x,
-            origin_y=origin_y, tile_width=tile_width, tile_height=tile_height)
-
-        x = 5
-        y = 30
-        group = pyglet.graphics.OrderedGroup(3)
-        entity = Mock(x=x, y=y, group=group)
-
-        ex, ey, ez = room.get_coords(entity)
-        assert ex == (x - origin_x) / tile_width
-        assert ey == (y - origin_y) / tile_height
-        assert ez == group.order
 
     def TestAddPortals_MappingHasHashableVals_UpdatePortalsWith2WayMap(self):
         entities = MagicMock()

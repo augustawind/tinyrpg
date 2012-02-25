@@ -38,12 +38,18 @@ class Entity(pyglet.sprite.Sprite):
     """
 
     def __init__(self, image, name='', walkable=False, action=None,
-                 facing=(0, -1), id=None):
+                 facing=(0, -1), id=None, tile_x=0, tile_y=0, tile_z=0):
         """Return an Entity instance.
         
         :Parameters:
             image : pyglet.image.AbstractImage or pyglet.image.Animation
                 Image to represent the entity.
+            tile_x : int
+                X coordinate of initial tile. Defaults to ``0``.
+            tile_y : int
+                Y coordinate of initial tile. Defaults to ``0``.
+            tile_z : int
+                Z coordinate of initial tile. Defaults to ``0``.
 
         All other parameters are optional and give initial values for
         instance attributes.
@@ -55,6 +61,59 @@ class Entity(pyglet.sprite.Sprite):
         self.facing = facing
         self.action = action
         self.id = id
+
+        self._tile_x = tile_x
+        self._tile_y = tile_y
+        self._tile_z = tile_z
+
+    @property
+    def tile_x(self):
+        """X tile position of the Entity."""
+        return self._tile_x
+    @property
+    def tile_y(self):
+        """Y tile position of the Entity."""
+        return self._tile_y
+    @property
+    def tile_z(self):
+        """Z tile position of the Entity."""
+        return self._tile_z
+    @property
+    def tile_pos(self):
+        """Swizzle for ``tile_x, tile_y, tile_z``."""
+        return self._tile_x, self._tile_y, self._tile_z
+
+    def update(self, x, y, z, offset_x=0, offset_y=0, tile_width=1,
+               tile_height=1, batch=None):
+        """Update the entity to reflect the given positional information
+        and batch.
+        
+        :Parameters:
+            x : int
+                X tile position of the entity.
+            y : int
+                Y tile position of the entity.
+            z : int
+                Z tile position of the entity.
+            offset_x : int
+                Horizontal placement offset, in pixels.
+            offset_y : int
+                Vertical placement offset, in pixels.
+            tile_width : int
+                Width to give each tile, in pixels.
+            tile_height : int
+                Height to give each tile, in pixels.
+            batch: ``pyglet.graphics.Batch`` or ``None``
+                Add entity to this batch.
+        """
+        self._tile_x = x
+        self._tile_y = y
+        self._tile_z = z
+
+        self.x = self._tile_x * tile_width + origin_x
+        self.y = self._tile_y * tile_height + origin_y
+        self.group = OrderedGroup(self._tile_z)
+        self.batch = batch
 
 
 class Room(object):
@@ -103,11 +162,8 @@ class Room(object):
         This method should be called every time a position in the room
         is assigned to a new Entity.
         """
-        newx = x * self.tile_width + self.origin_x
-        newy = y * self.tile_height + self.origin_y
-        entity.set_position(newx, newy)
-        entity.group = OrderedGroup(z)
-        entity.batch = self.batch
+        entity.update(x, y, z, self.origin_x, self.origin_y, self.tile_width,
+                      self.tile_height, self.batch)
 
     def update(self):
         """Update all entities in the room, preparing it for rendering."""
@@ -125,16 +181,6 @@ class Room(object):
         return(0 <= y < len(self._entities) and
                0 <= x < len(self._entities[y]) and
                all(e is None or e.walkable for e in self._entities[y][x]))
-
-    def get_coords(self, entity):
-        """Return the coordinate position of the given entity.
-        
-        :returns: ``x, y, z`` coordinates of the Entity
-        """
-        x = (entity.x - self.origin_x) / self.tile_width
-        y = (entity.y - self.origin_y) / self.tile_height
-        z = -1 if entity.group is None else entity.group.order
-        return x, y, z
 
     def add_portals(self, portals):
         """Add and index the given portals.
@@ -180,7 +226,7 @@ class Room(object):
         self._entities[y][x][z] = None
         return entity
     
-    def step_entity(self, entity, xstep, ystep):
+    def step_entity(self, entity, xstep, ystep, z=None):
         """Move given entity a given distance from its current position.
 
         If the new position isn't walkable, nothing happens.
@@ -205,12 +251,13 @@ class Room(object):
         entity.facing = (xstep / abs(xstep) if xstep else 0,
                          ystep / abs(ystep) if ystep else 0)
 
-        x, y, z = self.get_coords(entity)
-        newx = x + xstep
-        newy = y + ystep
+        newx = entity.tile_x + xstep
+        newy = entity.tile_y + ystep
         if not self.is_walkable(newx, newy):
             return False
 
+        if z is None:
+            z = entity.tile_z
         self.pop_entity(x, y, z)
         self.add_entity(entity, newx, newy, z)
         return True
@@ -231,8 +278,7 @@ class Room(object):
         """
         from_room = self.focus.name
         dest = self.portals[(x, y)]
-        z = self.focus.get_coords(entity)[2]
-        self.pop_entity(x, y, z)
+        self.pop_entity(x, y, entity.tile_z)
         x, y = self.portals[self.focus.name]
 
 
@@ -310,7 +356,7 @@ class World(GameMode):
             return
 
         from_room = self.focus.name
-        x, y, z = self.focus.get_coords(self.player)
+        x, y, z = self.player.tile_pos
         if (x, y) in self.focus.portals:
             self.portal_player(x, y)
 
@@ -328,7 +374,7 @@ class World(GameMode):
         """If an interactable entity is in front of the player, make
         her interact with it. Else, do nothing.
         """
-        x, y, z = self.focus.get_coords(self.player)
+        x, y, z = self.player.tile_pos
         x += self.player.facing[0]
         y += self.player.facing[1]
         for entity in self.focus[y][x]:
