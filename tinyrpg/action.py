@@ -1,6 +1,5 @@
 """classes that succintly describe entity actions"""
 
-import abc
 from itertools import *
 
 __all__ = [
@@ -14,9 +13,6 @@ class AbstractAction(object):
     All entity action classes should derive from this class.
     """
 
-    __metaclass__ = abc.ABCMeta
-
-    @abc.abstractmethod
     def __call__(self, world, entity):
         """Execute the action, given WorldMode object `world` and
         acting Entity object `entity`.

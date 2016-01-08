@@ -1,5 +1,5 @@
 import pyglet
-from mock import *
+from unittest.mock import *
 
 from tests.util import dummy_image
 from tinyrpg.world import *
@@ -163,7 +163,7 @@ class TestRoom(object):
         new_portals = {'another room': (1, 1), 'some other room': (2, 5)}
         room.add_portals(new_portals)
         indexed_portals = new_portals.copy()
-        indexed_portals.update((v, k) for (k, v) in new_portals.iteritems())
+        indexed_portals.update((v, k) for (k, v) in new_portals.items())
         assert room.portals == indexed_portals
 
     def TestAddEntity_(self):pass

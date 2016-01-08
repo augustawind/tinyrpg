@@ -189,7 +189,7 @@ class Room(object):
                         ``(x, y)`` coordinate tuples.
         """
         self.portals.update(portals)
-        self.portals.update((v, k) for k, v in portals.iteritems())
+        self.portals.update((v, k) for k, v in portals.items())
 
     def _place_entity(self, entity, x, y, z):
         """Assign coordinate point (x, y, z) to `entity`."""

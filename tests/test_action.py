@@ -1,12 +1,8 @@
-from mock import *
+from unittest.mock import *
 from nose.tools import raises
 
 from tinyrpg.action import *
 from tinyrpg.world import Entity, World
-
-@raises(TypeError)
-def TestAbstractActionClassIsAbstract():
-    AbstractAction()
 
 
 class TestActionIter(object):
@@ -33,11 +29,11 @@ class TestActionIter(object):
 class TestActionLoop(object):
 
     def TestCall_NumCallsExceedsNumActions_LoopAround(self):
-        actions = [Mock(spec=AbstractAction) for i in xrange(3)]
+        actions = [Mock(spec=AbstractAction) for i in range(3)]
         actionloop = ActionLoop(*actions)
         world, entity = object(), object()
 
-        for i in xrange(5):
+        for i in range(5):
             actionloop(world, entity)
 
         assert actions[0].call_count == 2
@@ -57,11 +53,11 @@ class TestActionCycle(object):
         action1.assert_called_once_with(world, entity)
 
     def TestCall_NumCallsExceedsNumActions_LoopAround(self):
-        actions = [Mock(spec=AbstractAction) for i in xrange(3)]
+        actions = [Mock(spec=AbstractAction) for i in range(3)]
         actioncycle = ActionCycle(2, *actions)
         world, entity = object(), object()
 
-        for i in xrange(5):
+        for i in range(5):
             actioncycle(world, entity)
 
         assert actions[0].call_count == 2
@@ -72,11 +68,11 @@ class TestActionCycle(object):
 class TestActionSequence(object):
 
     def TestCall_CallAllActions(self):
-        actions = [Mock(spec=AbstractAction) for i in xrange(2)]
+        actions = [Mock(spec=AbstractAction) for i in range(2)]
         actionseq = ActionSequence(*actions)
         world, entity = object(), object()
 
-        for i in xrange(3):
+        for i in range(3):
             actionseq(world, entity)
         assert actions[0].call_count == 3
         assert actions[1].call_count == 3
